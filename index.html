@@ -201,17 +201,26 @@
     });
     return pdfjsPromise;
   }
-  function candidateUrls(url){
-    var list=[url];
+  function candidateUrls(url,cid){
+    var list=[];
+    var idm=url.match(/(BF-C\d+)/i);
+    var id=idm?idm[1].toUpperCase():(cid||"");
+    // النسخة المضغوطة أولًا: أسرع وأوفر للبيانات (تدعم CORS عبر jsdelivr)
+    if(id){
+      list.push("https://cdn.jsdelivr.net/gh/artmarksKSA/artmarks-certificates@main/"+id+"_compressed.pdf");
+    }
+    if(/^https?:\/\//i.test(url)){
+      list.push(url);
+    }else if(id){
+      // الرابط المسجل على البلوكتشين ناقص — نبحث عن الملف بجوار الصفحة باسم رقم الشهادة
+      list.push(id+".png",id+".jpg",id+".jpeg",id+".pdf",id+"_compressed.pdf",url);
+    }else{
+      list.push(url);
+    }
     var m=url.match(/\/ipfs\/([^?#]+)/);
     if(m){
       var p=m[1];
       list.push("https://ipfs.io/ipfs/"+p,"https://cloudflare-ipfs.com/ipfs/"+p,"https://dweb.link/ipfs/"+p);
-    }
-    // النسخة المضغوطة من مستودع الشهادات على جيتهاب (تدعم CORS عبر jsdelivr)
-    var idm=url.match(/(BF-C\d+)/i);
-    if(idm){
-      list.push("https://cdn.jsdelivr.net/gh/artmarksKSA/artmarks-certificates@main/"+idm[1].toUpperCase()+"_compressed.pdf");
     }
     return list;
   }
@@ -219,10 +228,18 @@
     if(i>=urls.length)return Promise.reject(new Error("fetch blocked"));
     return fetch(urls[i],{mode:"cors"}).then(function(r){
       if(!r.ok)throw new Error("http "+r.status);
-      return r.arrayBuffer();
+      return r.arrayBuffer().then(function(b){return {buf:b,url:urls[i]};});
     }).catch(function(){return fetchFirst(urls,i+1);});
   }
   function setSub(fb,txt){var s=fb.querySelector(".ct-sub");if(s)s.textContent=txt;}
+  function fixLinks(badUrl,goodUrl,wrap){
+    if(badUrl===goodUrl)return;
+    wrap.href=goodUrl;
+    var as=document.querySelectorAll("a");
+    for(var i=0;i<as.length;i++){
+      if(as[i].getAttribute("href")===badUrl)as[i].setAttribute("href",goodUrl);
+    }
+  }
   function attachImg(wrap,fb,src){
     var img=document.createElement("img");
     img.className="cert-thumb-media";
@@ -248,10 +265,10 @@
     frame.onload=function(){setTimeout(function(){fb.style.display="none";},600);};
     wrap.insertBefore(frame,fb.nextSibling);
   }
-  function renderPdfThumb(wrap,fb,url){
+  function renderPdfThumb(wrap,fb,url,cid){
     setSub(fb,"\u062c\u0627\u0631\u064d \u062a\u062d\u0645\u064a\u0644 \u0635\u0648\u0631\u0629 \u0627\u0644\u0634\u0647\u0627\u062f\u0629\u2026");
     loadPdfJs().then(function(pdfjs){
-      return fetchFirst(candidateUrls(url),0).then(function(buf){
+      return fetchFirst(candidateUrls(url,cid),0).then(function(res){var buf=res.buf;fixLinks(url,res.url,wrap);
         var h=new Uint8Array(buf.slice(0,5));
         var isPdf=h[0]===37&&h[1]===80&&h[2]===68&&h[3]===70; // %PDF
         if(!isPdf){
@@ -280,7 +297,7 @@
       setSub(fb,"\u0645\u0648\u062b\u0651\u0642\u0629 \u0639\u0644\u0649 \u0627\u0644\u0628\u0644\u0648\u0643\u062a\u0634\u064a\u0646 \u2713");
     });
   }
-  function buildThumb(url){
+  function buildThumb(url,cid){
     var wrap=document.createElement("a");
     wrap.className="cert-thumb";
     wrap.href=url;wrap.target="_blank";wrap.rel="noopener noreferrer";
@@ -294,7 +311,7 @@
       setSub(fb,"\u062c\u0627\u0631\u064d \u062a\u062d\u0645\u064a\u0644 \u0635\u0648\u0631\u0629 \u0627\u0644\u0634\u0647\u0627\u062f\u0629\u2026");
       attachImg(wrap,fb,url);
     }else{
-      renderPdfThumb(wrap,fb,url);
+      renderPdfThumb(wrap,fb,url,cid);
     }
     var shine=document.createElement("div");
     shine.className="cert-shine";
@@ -318,7 +335,9 @@
       a.setAttribute("data-cert-thumb-done","1");
       var url=a.getAttribute("href");
       if(!url)continue;
-      a.parentNode.insertBefore(buildThumb(url),a);
+      var inp=document.querySelector("input");
+      var cm=inp&&inp.value?inp.value.match(/(BF-C\d+)/i):null;
+      a.parentNode.insertBefore(buildThumb(url,cm?cm[1].toUpperCase():""),a);
     }
   }
   var obs=new MutationObserver(function(){enhance();});
@@ -327,5 +346,5 @@
 })();
 </script>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33c96aebf08ed1b',t:'MTc4ODE4NTExMA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33d0238fcf50e1f',t:'MTc4ODE4OTUxNQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
