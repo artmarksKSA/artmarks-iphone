@@ -232,13 +232,53 @@
     }).catch(function(){return fetchFirst(urls,i+1);});
   }
   function setSub(fb,txt){var s=fb.querySelector(".ct-sub");if(s)s.textContent=txt;}
-  function fixLinks(badUrl,goodUrl,wrap){
-    if(badUrl===goodUrl)return;
-    wrap.href=goodUrl;
+  var FIXED={};
+  function applyFixes(){
     var as=document.querySelectorAll("a");
     for(var i=0;i<as.length;i++){
-      if(as[i].getAttribute("href")===badUrl)as[i].setAttribute("href",goodUrl);
+      var h=as[i].getAttribute("href");
+      if(h&&FIXED[h])h=FIXED[h],as[i].setAttribute("href",h);
+      // زر التحميل: تنزيل فعلي للملف بدل فتحه (يعمل لأن الملف على نفس النطاق)
+      var t=(as[i].textContent||"");
+      if(h&&(t.indexOf("\u062a\u062d\u0645\u064a\u0644")!==-1||t.indexOf("Download")!==-1)){
+        try{
+          var uo=new URL(h,location.href);
+          if(uo.origin===location.origin){
+            var fn=uo.pathname.split("/").pop()||"certificate";
+            as[i].setAttribute("download",fn);
+            as[i].removeAttribute("target");
+          }
+        }catch(e){}
+      }
     }
+  }
+  function fixLinks(badUrl,goodUrl,wrap){
+    if(badUrl===goodUrl)return;
+    var abs;
+    try{abs=new URL(goodUrl,location.href).href;}catch(e){abs=goodUrl;}
+    wrap.href=abs;
+    FIXED[badUrl]=abs;
+    applyFixes();
+    fixQR(abs);
+  }
+  // إعادة توليد رمز QR بالرابط الصحيح الكامل بدل الرابط المكسور المسجل على البلوكتشين
+  function fixQR(absUrl){
+    var qrCanvas=document.querySelector('canvas[role="img"]');
+    if(!qrCanvas)return;
+    var s=document.createElement("script");
+    s.src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js";
+    s.onload=function(){
+      try{
+        var q=new QRious({value:absUrl,size:320,level:"M",foreground:"#4a7e6e",background:"#ffffff"});
+        var img=document.createElement("img");
+        img.src=q.toDataURL();
+        img.width=160;img.height=160;
+        img.alt="QR";
+        img.style.display="block";
+        qrCanvas.parentNode.replaceChild(img,qrCanvas);
+      }catch(e){}
+    };
+    document.head.appendChild(s);
   }
   function attachImg(wrap,fb,src){
     var img=document.createElement("img");
@@ -328,6 +368,7 @@
     return false;
   }
   function enhance(){
+    applyFixes();
     var anchors=document.querySelectorAll('a[target="_blank"]:not([data-cert-thumb-done])');
     for(var i=0;i<anchors.length;i++){
       var a=anchors[i];
@@ -346,5 +387,5 @@
 })();
 </script>
 
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33d0238fcf50e1f',t:'MTc4ODE4OTUxNQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a33d212bdd56ed18',t:'MTc4ODE5MDc4Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
